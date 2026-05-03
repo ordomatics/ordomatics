@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+
+    <!-- ============================================================
+         CLIENT COMPANY — Kajande
+         The SaaS tenant that owns the WhatsApp Business Account.
+    ============================================================ -->
+    <record id="partner_kajande" model="res.partner">
+        <field name="name">Kajande</field>
+        <field name="is_company" eval="True"/>
+        <field name="company_type">company</field>
+        <field name="phone">+221773649575</field>
+    </record>
+
+    <!-- ============================================================
+         EMPLOYEE OPERATOR — Moctar
+         mobile = his personal WhatsApp used for self-testing
+    ============================================================ -->
+    <record id="partner_moctar" model="res.partner">
+        <field name="name">Moctar</field>
+        <field name="parent_id" ref="partner_kajande"/>
+        <field name="is_company" eval="False"/>
+        <field name="company_type">person</field>
+        <field name="phone">+221773649575</field>
+        <field name="mobile">+221778577500</field>
+        <field name="whatsapp_enabled" eval="True"/>
+        <field name="whatsapp_opt_in" eval="True"/>
+        <field name="whatsapp_opt_in_method">internal</field>
+    </record>
+
+    <!-- ============================================================
+         END CUSTOMER — Amadou
+         A regular contact who has opted in to receive messages.
+    ============================================================ -->
+    <record id="partner_amadou" model="res.partner">
+        <field name="name">Amadou</field>
+        <field name="is_company" eval="False"/>
+        <field name="company_type">person</field>
+        <field name="phone">+221771332916</field>
+        <field name="mobile">+221771332916</field>
+        <field name="whatsapp_enabled" eval="True"/>
+        <field name="whatsapp_opt_in" eval="True"/>
+        <field name="whatsapp_opt_in_method">verbal</field>
+    </record>
+
+</odoo>
