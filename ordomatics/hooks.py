@@ -22,7 +22,7 @@ def run_bootstrap(env):
     # Canonical DB only — platform-wide configuration
     if not _is_canonical_db(env):
         _logger.info(
-            "ordomatics_setup: skipping canonical-only setup for non-canonical DB '%s'",
+            "ordomatics: skipping canonical-only setup for non-canonical DB '%s'",
             env.cr.dbname,
         )
         return
@@ -64,17 +64,17 @@ def _load_canonical_data(env):
         "data/prompts/mrp.xml",
         "data/assistants/mrp.xml",
     ]
-    _module_path = get_module_path("ordomatics_setup")
+    _module_path = get_module_path("ordomatics")
     if not _module_path:
-        _logger.warning("ordomatics_setup: module path not found — skipping canonical data load")
+        _logger.warning("ordomatics: module path not found — skipping canonical data load")
         return
     module_root = Path(_module_path)
     for data_file in _CANONICAL_DATA_FILES:
         path = module_root / data_file
         if not path.is_file():
-            _logger.warning("ordomatics_setup: canonical data file not found: %s", path)
+            _logger.warning("ordomatics: canonical data file not found: %s", path)
             continue
-        convert_file(env, "ordomatics_setup", data_file, {}, "init", True)
+        convert_file(env, "ordomatics", data_file, {}, "init", True)
 
 def _setup_s3_storage(env):
     """Configure the fs.storage S3 record if it exists.
@@ -88,10 +88,10 @@ def _setup_s3_storage(env):
     use the OCA default (images <50 KB + JS/CSS in DB, large files to S3).
     """
     storage = env.ref(
-        "ordomatics_setup.fs_storage_s3_filestore", raise_if_not_found=False
+        "ordomatics.fs_storage_s3_filestore", raise_if_not_found=False
     )
     if not storage:
-        _logger.warning("ordomatics_setup: fs_storage_s3_filestore not found, skipping S3 setup")
+        _logger.warning("ordomatics: fs_storage_s3_filestore not found, skipping S3 setup")
         return
 
     storage.use_as_default_for_attachments = True
@@ -100,10 +100,10 @@ def _setup_s3_storage(env):
     if rules:
         storage.force_db_for_default_attachment_rules = rules
         _logger.info(
-            "ordomatics_setup: force_db_for_default_attachment_rules set to %s", rules
+            "ordomatics: force_db_for_default_attachment_rules set to %s", rules
         )
 
-    _logger.info("ordomatics_setup: S3 storage enabled as default for attachments")
+    _logger.info("ordomatics: S3 storage enabled as default for attachments")
 
 
 def _cleanup_stale_attachments(env):
@@ -122,7 +122,7 @@ def _cleanup_stale_attachments(env):
     """)
     deleted = env.cr.rowcount
     if deleted:
-        _logger.info("ordomatics_setup: deleted %d stale PVC-backed attachments", deleted)
+        _logger.info("ordomatics: deleted %d stale PVC-backed attachments", deleted)
 
 
 def _recompute_menu_icons(env):
@@ -140,7 +140,7 @@ def _recompute_menu_icons(env):
         menu.with_context(prefetch_fields=False).write({"web_icon": menu.web_icon})
     env.cr.commit()
     _logger.info(
-        "ordomatics_setup: recomputed web_icon_data for %d menus", len(menus)
+        "ordomatics: recomputed web_icon_data for %d menus", len(menus)
     )
 
 
@@ -169,7 +169,7 @@ def _setup_company_identity(env):
             vals["country_id"] = senegal.id
         if vals:
             company.write(vals)
-            _logger.info("ordomatics_setup: updated base company — %s", list(vals))
+            _logger.info("ordomatics: updated base company — %s", list(vals))
 
     if admin and admin.partner_id:
         vals = {}
@@ -177,22 +177,22 @@ def _setup_company_identity(env):
             vals["email"] = default_email
         if vals:
             admin.partner_id.write(vals)
-            _logger.info("ordomatics_setup: updated admin contact — %s", list(vals))
+            _logger.info("ordomatics: updated admin contact — %s", list(vals))
 
 
 def _setup_currency_xof(env):
     """Activate XOF and set it as the main company currency."""
     xof = env['res.currency'].search([('name', '=', 'XOF')], limit=1)
     if not xof:
-        _logger.warning("ordomatics_setup: XOF currency not found in DB — skipping")
+        _logger.warning("ordomatics: XOF currency not found in DB — skipping")
         return
     if not xof.active:
         xof.write({'active': True})
-        _logger.info("ordomatics_setup: activated XOF currency")
+        _logger.info("ordomatics: activated XOF currency")
     company = env.ref('base.main_company', raise_if_not_found=False)
     if company and company.currency_id != xof:
         company.write({'currency_id': xof.id})
-        _logger.info("ordomatics_setup: company currency set to XOF")
+        _logger.info("ordomatics: company currency set to XOF")
 
 
 def _setup_billing_config(env):
@@ -212,35 +212,32 @@ def _setup_billing_config(env):
         value = os.environ.get(env_var, '').strip()
         if value:
             params.set_param(param_key, value)
-            _logger.info("ordomatics_setup: %s → %s = %s", env_var, param_key, value)
+            _logger.info("ordomatics: %s → %s = %s", env_var, param_key, value)
 
 
 def _sync_billing_product_prices(env):
-    """Sync standard_price and list_price from credit_cost on all billing products.
+    """Apply profit margin to list_price on all AI Service products.
 
-    Delegates to billing.product._sync_prices() when billing_llm is installed
-    (reads billing.profit from config). Falls back to standard_price = credit_cost,
-    list_price = credit_cost + billing.profit param when the method is absent.
+    standard_price = credit cost (set in data XML).
+    list_price = standard_price + billing.profit config param.
     """
-    BillingProduct = env.get('billing.product')
-    if BillingProduct is None:
+    categ = env.ref('billing_products.product_categ_ai_service', raise_if_not_found=False)
+    if categ is None:
         return
-    products = BillingProduct.search([('credit_cost', '>', 0)])
+    products = env['product.template'].search([
+        ('categ_id', '=', categ.id),
+        ('standard_price', '>', 0),
+    ])
     if not products:
         return
-    if hasattr(products, '_sync_prices'):
-        products._sync_prices()
-    else:
-        profit = float(
-            env['ir.config_parameter'].sudo().get_param('billing.profit', '0')
-        )
-        for product in products:
-            product.product_tmpl_id.write({
-                'standard_price': product.credit_cost,
-                'list_price': product.credit_cost + profit,
-            })
+    profit = float(
+        env['ir.config_parameter'].sudo().get_param('billing.profit', '0')
+    )
+    for product in products:
+        product.write({'list_price': product.standard_price + profit})
     _logger.info(
-        "ordomatics_setup: synced prices for %d billing products", len(products)
+        "ordomatics: synced list_price for %d AI Service products (profit=%.2f)",
+        len(products), profit,
     )
 
 
@@ -252,17 +249,17 @@ def _setup_kajande_contacts(env):
     """
     if os.environ.get("ORDOMATICS_SEED_DATA", "").lower() != "true":
         return
-    kajande = env.ref("ordomatics_setup.partner_kajande", raise_if_not_found=False)
-    moctar = env.ref("ordomatics_setup.partner_moctar", raise_if_not_found=False)
+    kajande = env.ref("ordomatics.partner_kajande", raise_if_not_found=False)
+    moctar = env.ref("ordomatics.partner_moctar", raise_if_not_found=False)
     kajande_phone = "+221773649575"
 
     if kajande and kajande.phone != kajande_phone:
         kajande.write({"phone": kajande_phone})
-        _logger.info("ordomatics_setup: set Kajande phone to %s", kajande_phone)
+        _logger.info("ordomatics: set Kajande phone to %s", kajande_phone)
 
     if moctar and moctar.phone != kajande_phone:
         moctar.write({"phone": kajande_phone})
-        _logger.info("ordomatics_setup: set Moctar operator phone to %s", kajande_phone)
+        _logger.info("ordomatics: set Moctar operator phone to %s", kajande_phone)
 
 
 def post_init_hook(env):
@@ -280,12 +277,12 @@ def _setup_whatsapp_endpoint(env):
     verify_token = os.environ.get("META_VERIFY_TOKEN", "").strip()
 
     if not any([app_secret, verify_token]):
-        _logger.info("ordomatics_setup: no env credentials for WhatsApp endpoint — skipping")
+        _logger.info("ordomatics: no env credentials for WhatsApp endpoint — skipping")
         return
 
     endpoint = env.ref("whatsapp_base.endpoint_whatsapp_webhook", raise_if_not_found=False)
     if not endpoint:
-        _logger.warning("ordomatics_setup: webhook endpoint not found — skipping")
+        _logger.warning("ordomatics: webhook endpoint not found — skipping")
         return
 
     vals = {}
@@ -295,7 +292,7 @@ def _setup_whatsapp_endpoint(env):
         vals["whatsapp_verify_token"] = verify_token
 
     endpoint.write(vals)
-    _logger.info("ordomatics_setup: WhatsApp webhook endpoint credentials updated from env vars")
+    _logger.info("ordomatics: WhatsApp webhook endpoint credentials updated from env vars")
 
 
 def _setup_whatsapp_account(env):
@@ -317,7 +314,7 @@ def _setup_whatsapp_account(env):
 
     if not waba_id:
         _logger.info(
-            "ordomatics_setup: WHATSAPP_BUSINESS_ACCOUNT_ID not set — skipping WhatsApp account setup"
+            "ordomatics: WHATSAPP_BUSINESS_ACCOUNT_ID not set — skipping WhatsApp account setup"
         )
         return
 
@@ -327,7 +324,7 @@ def _setup_whatsapp_account(env):
     )
 
     account_name = os.environ.get("WHATSAPP_ACCOUNT_NAME", "Kajande").strip() or "Kajande"
-    kajande = env.ref("ordomatics_setup.partner_kajande", raise_if_not_found=False)
+    kajande = env.ref("ordomatics.partner_kajande", raise_if_not_found=False)
 
     vals = {"waba_id": waba_id, "platform_company_id": company.id}
     if access_token:
@@ -339,32 +336,32 @@ def _setup_whatsapp_account(env):
 
     if account:
         account.write(vals)
-        _logger.info("ordomatics_setup: updated WhatsApp account waba_id=%s", waba_id)
+        _logger.info("ordomatics: updated WhatsApp account waba_id=%s", waba_id)
     else:
         vals["name"] = account_name
         env["whatsapp.account"].create(vals)
-        _logger.info("ordomatics_setup: created WhatsApp account '%s' waba_id=%s", account_name, waba_id)
+        _logger.info("ordomatics: created WhatsApp account '%s' waba_id=%s", account_name, waba_id)
 
 
 def _setup_replicate(env):
     """Auto-create Replicate provider and preload selected generation models."""
     LLMProvider = env.get("llm.provider")
     if LLMProvider is None:
-        _logger.info("ordomatics_setup: llm.provider not available, skipping Replicate setup")
+        _logger.info("ordomatics: llm.provider not available, skipping Replicate setup")
         return
 
     provider = LLMProvider.search([("service", "=", "replicate")], limit=1)
     if not provider:
         provider = LLMProvider.create({"name": "Replicate", "service": "replicate"})
-        _logger.info("ordomatics_setup: created Replicate provider id=%s", provider.id)
+        _logger.info("ordomatics: created Replicate provider id=%s", provider.id)
 
     api_key = os.environ.get("REPLICATE_API_TOKEN", "").strip()
     if api_key and not provider.api_key:
         provider.sudo().write({"api_key": api_key})
-        _logger.info("ordomatics_setup: set Replicate API key from REPLICATE_API_TOKEN env var")
+        _logger.info("ordomatics: set Replicate API key from REPLICATE_API_TOKEN env var")
     elif not api_key and not provider.api_key:
         _logger.warning(
-            "ordomatics_setup: REPLICATE_API_TOKEN not set — enter key manually in LLM > Providers"
+            "ordomatics: REPLICATE_API_TOKEN not set — enter key manually in LLM > Providers"
         )
         return
 
@@ -446,21 +443,21 @@ def _setup_fal_ai(env):
     """Auto-create Fal.ai provider and preload selected generation models."""
     LLMProvider = env.get("llm.provider")
     if LLMProvider is None:
-        _logger.info("ordomatics_setup: llm.provider not available, skipping Fal.ai setup")
+        _logger.info("ordomatics: llm.provider not available, skipping Fal.ai setup")
         return
 
     provider = LLMProvider.search([("service", "=", "fal_ai")], limit=1)
     if not provider:
         provider = LLMProvider.create({"name": "Fal.ai", "service": "fal_ai"})
-        _logger.info("ordomatics_setup: created Fal.ai provider id=%s", provider.id)
+        _logger.info("ordomatics: created Fal.ai provider id=%s", provider.id)
 
     api_key = os.environ.get("FAL_KEY", "").strip()
     if api_key and not provider.api_key:
         provider.sudo().write({"api_key": api_key})
-        _logger.info("ordomatics_setup: set Fal.ai API key from FAL_KEY env var")
+        _logger.info("ordomatics: set Fal.ai API key from FAL_KEY env var")
     elif not api_key and not provider.api_key:
         _logger.warning(
-            "ordomatics_setup: FAL_KEY not set — enter key manually in LLM > Providers"
+            "ordomatics: FAL_KEY not set — enter key manually in LLM > Providers"
         )
         return
 
@@ -551,11 +548,11 @@ def _ensure_provider_model(env, provider, fetch_method, model_name, model_use):
         if vals:
             model.write(vals)
             _logger.info(
-                "ordomatics_setup: updated %s id=%s with %s",
+                "ordomatics: updated %s id=%s with %s",
                 model_name, model.id, ", ".join(vals.keys()),
             )
         else:
-            _logger.info("ordomatics_setup: %s already exists id=%s", model_name, model.id)
+            _logger.info("ordomatics: %s already exists id=%s", model_name, model.id)
         return model
 
     try:
@@ -563,7 +560,7 @@ def _ensure_provider_model(env, provider, fetch_method, model_name, model_use):
         model_data = next(model_fetcher(model_id=model_name), None)
     except Exception as e:
         _logger.warning(
-            "ordomatics_setup: could not fetch %s from provider %s: %s",
+            "ordomatics: could not fetch %s from provider %s: %s",
             model_name,
             provider.service,
             e,
@@ -575,7 +572,7 @@ def _ensure_provider_model(env, provider, fetch_method, model_name, model_use):
         vals["details"] = model_data.get("details", {})
 
     model = LLMModel.create(vals)
-    _logger.info("ordomatics_setup: created %s id=%s", model_name, model.id)
+    _logger.info("ordomatics: created %s id=%s", model_name, model.id)
     return model
 
 
@@ -596,7 +593,7 @@ def _patch_flux_schnell_output_format(model):
     new_input_schema["properties"] = new_props
     new_details["input_schema"] = new_input_schema
     model.write({"details": new_details})
-    _logger.info("ordomatics_setup: patched flux-schnell output_format default → png")
+    _logger.info("ordomatics: patched flux-schnell output_format default → png")
 
 
 # ---------------------------------------------------------------------------
@@ -612,12 +609,12 @@ def _setup_base_url(env):
     """
     server_url = os.environ.get("SERVER_URL", "").strip().rstrip("/")
     if not server_url:
-        _logger.info("ordomatics_setup: SERVER_URL not set — web.base.url left as-is")
+        _logger.info("ordomatics: SERVER_URL not set — web.base.url left as-is")
         return
     params = env["ir.config_parameter"].sudo()
     params.set_param("web.base.url", server_url)
     params.set_param("web.base.url.freeze", "True")
-    _logger.info("ordomatics_setup: web.base.url set to %s (frozen)", server_url)
+    _logger.info("ordomatics: web.base.url set to %s (frozen)", server_url)
 
 
 def _setup_nomic_embedding(env):
@@ -642,13 +639,13 @@ def _setup_nomic_embedding(env):
         api_base = os.environ.get("OLLAMA_API_BASE", "").strip()
         if api_base:
             env["ir.config_parameter"].sudo().set_param("llm_skills.ollama_api_base", api_base)
-            _logger.info("ordomatics_setup: NOMIC_API_KEY not set — using Ollama at %s", api_base)
+            _logger.info("ordomatics: NOMIC_API_KEY not set — using Ollama at %s", api_base)
         else:
-            _logger.info("ordomatics_setup: NOMIC_API_KEY not set — skipping embedding provider setup")
+            _logger.info("ordomatics: NOMIC_API_KEY not set — skipping embedding provider setup")
         return
 
     if env.get("llm.provider") is None:
-        _logger.info("ordomatics_setup: llm.provider model not available — skipping Nomic setup")
+        _logger.info("ordomatics: llm.provider model not available — skipping Nomic setup")
         return
 
     NOMIC_MODEL = "nomic-embed-text-v1.5"
@@ -662,10 +659,10 @@ def _setup_nomic_embedding(env):
             "api_key": api_key,
             "active": True,
         })
-        _logger.info("ordomatics_setup: Created Nomic provider (id=%s)", provider.id)
+        _logger.info("ordomatics: Created Nomic provider (id=%s)", provider.id)
     else:
         provider.sudo().write({"api_key": api_key, "service": "nomic", "api_base": False})
-        _logger.info("ordomatics_setup: Updated Nomic provider (id=%s)", provider.id)
+        _logger.info("ordomatics: Updated Nomic provider (id=%s)", provider.id)
 
     # Find or create the embedding model record
     model = env["llm.model"].search([
@@ -680,7 +677,7 @@ def _setup_nomic_embedding(env):
             "default": True,
             "active": True,
         })
-        _logger.info("ordomatics_setup: Registered embedding model '%s'", NOMIC_MODEL)
+        _logger.info("ordomatics: Registered embedding model '%s'", NOMIC_MODEL)
 
     # Migrate existing collections still pointing to a stale embedding model.
     # The "|" catches two cases:
@@ -696,12 +693,12 @@ def _setup_nomic_embedding(env):
         if stale_collections:
             stale_collections.write({"embedding_model_id": model.id})
             _logger.info(
-                "ordomatics_setup: Migrated %d collection(s) to embedding model '%s'",
+                "ordomatics: Migrated %d collection(s) to embedding model '%s'",
                 len(stale_collections),
                 NOMIC_MODEL,
             )
 
-    _logger.info("ordomatics_setup: Nomic embedding provider configured (%s)", NOMIC_MODEL)
+    _logger.info("ordomatics: Nomic embedding provider configured (%s)", NOMIC_MODEL)
 
 
 # ---------------------------------------------------------------------------
@@ -726,13 +723,13 @@ def _setup_wave_provider(env):
 
     if not api_key or not signing_secret:
         _logger.info(
-            "ordomatics_setup: WAVE_API_KEY or WAVE_WEBHOOK_SIGNING_SECRET not set — skipping Wave provider setup"
+            "ordomatics: WAVE_API_KEY or WAVE_WEBHOOK_SIGNING_SECRET not set — skipping Wave provider setup"
         )
         return
 
     provider = env["payment.provider"].search([("code", "=", "wave")], limit=1)
     if not provider:
-        _logger.warning("ordomatics_setup: Wave payment provider not found — is payment_wave installed?")
+        _logger.warning("ordomatics: Wave payment provider not found — is payment_wave installed?")
         return
 
     vals = {
@@ -742,7 +739,7 @@ def _setup_wave_provider(env):
     }
     provider.sudo().write(vals)
     _logger.info(
-        "ordomatics_setup: Wave provider enabled (signing_secret=%s)",
+        "ordomatics: Wave provider enabled (signing_secret=%s)",
         "set" if signing_secret else "not set",
     )
 
@@ -764,10 +761,10 @@ def _sync_phone_numbers(env):
         try:
             with env.cr.savepoint():
                 account.action_sync_phone_numbers()
-            _logger.info("ordomatics_setup: synced phone numbers for account '%s'", account_name)
+            _logger.info("ordomatics: synced phone numbers for account '%s'", account_name)
         except Exception as exc:
             _logger.error(
-                "ordomatics_setup: could not sync phone numbers for '%s': %s", account_name, exc
+                "ordomatics: could not sync phone numbers for '%s': %s", account_name, exc
             )
 
 
@@ -781,7 +778,7 @@ def _assign_operators(env):
         return
     admin_phone = os.environ.get("DEFAULT_ADMIN_PHONE", "").strip()
     if not admin_phone:
-        _logger.info("ordomatics_setup: DEFAULT_ADMIN_PHONE not set — skipping operator assignment")
+        _logger.info("ordomatics: DEFAULT_ADMIN_PHONE not set — skipping operator assignment")
         return
     digits = admin_phone.lstrip("+")
     partner = (
@@ -790,7 +787,7 @@ def _assign_operators(env):
     )
     if not partner:
         _logger.warning(
-            "ordomatics_setup: no partner found for DEFAULT_ADMIN_PHONE=%s — skipping", admin_phone
+            "ordomatics: no partner found for DEFAULT_ADMIN_PHONE=%s — skipping", admin_phone
         )
         return
     phones = env["whatsapp.phone.number"].search([])
@@ -798,7 +795,7 @@ def _assign_operators(env):
         if partner not in phone.assigned_partner_ids:
             phone.assigned_partner_ids = [(4, partner.id)]
             _logger.info(
-                "ordomatics_setup: assigned %s as operator on %s",
+                "ordomatics: assigned %s as operator on %s",
                 partner.name, phone.display_phone_number,
             )
 
@@ -811,10 +808,10 @@ def _mark_phones_connected(env):
     for phone in phones:
         try:
             phone.action_mark_as_connected()
-            _logger.info("ordomatics_setup: marked %s as connected", phone.display_phone_number)
+            _logger.info("ordomatics: marked %s as connected", phone.display_phone_number)
         except Exception as exc:
             _logger.warning(
-                "ordomatics_setup: could not mark %s connected: %s",
+                "ordomatics: could not mark %s connected: %s",
                 phone.display_phone_number, exc,
             )
 
@@ -829,9 +826,9 @@ def _opt_in_partners(env):
     for partner in partners:
         try:
             partner.write({"whatsapp_opt_in": True, "whatsapp_opt_in_method": "admin"})
-            _logger.info("ordomatics_setup: opted in %s (%s)", partner.name, partner.mobile)
+            _logger.info("ordomatics: opted in %s (%s)", partner.name, partner.mobile)
         except Exception as exc:
-            _logger.error("ordomatics_setup: could not opt-in %s: %s", partner.name, exc)
+            _logger.error("ordomatics: could not opt-in %s: %s", partner.name, exc)
 
 
 # ---------------------------------------------------------------------------
@@ -845,7 +842,7 @@ def _setup_assistants(env):
     provider = env["llm.provider"].search([("service", "=", "anthropic")], limit=1)
     if not provider:
         _logger.warning(
-            "ordomatics_setup: Anthropic provider not found — "
+            "ordomatics: Anthropic provider not found — "
             "set provider_id and model_id manually on the WhatsApp assistants."
         )
 
@@ -887,24 +884,25 @@ def _setup_assistants(env):
         if vals:
             asst.write(vals)
             _logger.info(
-                "ordomatics_setup: configured assistant '%s' — %s", label, list(vals)
+                "ordomatics: configured assistant '%s' — %s", label, list(vals)
             )
         else:
-            _logger.info("ordomatics_setup: assistant '%s' already configured", label)
+            _logger.info("ordomatics: assistant '%s' already configured", label)
 
 
 def _index_catalog_for_search(env):
-    """Index billing.product records into the 'Products and Services' vector collection.
+    """Index AI Service product.template records into the 'Products and Services' vector collection.
 
     Follows the same bypass pattern as llm_skills_loader:
-    - One llm.resource per billing.product (state=ready, no pipeline)
+    - One llm.resource per product.template (state=ready, no pipeline)
     - One llm.knowledge.chunk per resource (content = description_sale)
     - collection.embed_resources() to generate and store the vector
 
     Only re-embeds records whose description_sale has changed.
-    No-op if llm.knowledge.collection or billing.product is not available.
+    No-op if llm.knowledge.collection or billing_products category is not available.
     """
-    if env.get("llm.knowledge.collection") is None or env.get("billing.product") is None:
+    categ = env.ref('billing_products.product_categ_ai_service', raise_if_not_found=False)
+    if env.get("llm.knowledge.collection") is None or categ is None:
         return
 
     collection = env["llm.knowledge.collection"].search(
@@ -926,31 +924,34 @@ def _index_catalog_for_search(env):
         store = env["llm.store"].search([("service", "=", "pgvector")], limit=1)
         if not store or not canonical_embedding_model:
             _logger.warning(
-                "ordomatics_setup: cannot create 'Products and Services' collection — "
+                "ordomatics: cannot create 'Products and Services' collection — "
                 "pgvector store or embedding model not found"
             )
             return
         collection = env["llm.knowledge.collection"].create({
             "name": "Products and Services",
-            "description": "AI service catalog — one chunk per billing.product for semantic model discovery.",
+            "description": "AI service catalog — one chunk per product for semantic model discovery.",
             "store_id": store.id,
             "embedding_model_id": canonical_embedding_model.id,
             "active": True,
         })
-        _logger.info("ordomatics_setup: created 'Products and Services' collection")
+        _logger.info("ordomatics: created 'Products and Services' collection")
     elif canonical_embedding_model and collection.embedding_model_id != canonical_embedding_model:
         collection.embedding_model_id = canonical_embedding_model
         _logger.info(
-            "ordomatics_setup: updated 'Products and Services' collection embedding model to '%s'",
+            "ordomatics: updated 'Products and Services' collection embedding model to '%s'",
             canonical_embedding_model.name,
         )
 
-    ir_model = env["ir.model"].search([("model", "=", "billing.product")], limit=1)
+    ir_model = env["ir.model"].search([("model", "=", "product.template")], limit=1)
     if not ir_model:
-        _logger.warning("ordomatics_setup: ir.model for billing.product not found")
+        _logger.warning("ordomatics: ir.model for product.template not found")
         return
 
-    products = env["billing.product"].search([("description_sale", "!=", False)])
+    products = env["product.template"].search([
+        ("categ_id", "=", categ.id),
+        ("description_sale", "!=", False),
+    ])
     resources_to_embed = []
 
     for product in products:
@@ -970,7 +971,7 @@ def _index_catalog_for_search(env):
                 "state": "ready",
                 "collection_ids": [(4, collection.id)],
             })
-            _logger.info("ordomatics_setup: created resource for billing.product '%s'", product.name)
+            _logger.info("ordomatics: created resource for product '%s'", product.name)
         elif collection.id not in resource.collection_ids.ids:
             resource.collection_ids = [(4, collection.id)]
 
@@ -996,15 +997,15 @@ def _index_catalog_for_search(env):
         try:
             collection.embed_resources(specific_resource_ids=resources_to_embed)
             _logger.info(
-                "ordomatics_setup: embedded %d billing.product resources into 'Products and Services'",
+                "ordomatics: embedded %d AI Service product resources into 'Products and Services'",
                 len(resources_to_embed),
             )
         except Exception as e:
             _logger.error(
-                "ordomatics_setup: embedding failed for 'Products and Services': %s", e, exc_info=True
+                "ordomatics: embedding failed for 'Products and Services': %s", e, exc_info=True
             )
     else:
-        _logger.info("ordomatics_setup: 'Products and Services' catalog index is up to date")
+        _logger.info("ordomatics: 'Products and Services' catalog index is up to date")
 
 
 def _setup_phone_number(env):
@@ -1018,7 +1019,7 @@ def _setup_phone_number(env):
     phone = _find_phone_number(env)
     if not phone:
         _logger.info(
-            "ordomatics_setup: no phone number found — "
+            "ordomatics: no phone number found — "
             "configure default_assistant_id manually after syncing."
         )
         return
@@ -1040,12 +1041,12 @@ def _setup_phone_number(env):
     if vals:
         phone.write(vals)
         _logger.info(
-            "ordomatics_setup: configured phone %s — %s",
+            "ordomatics: configured phone %s — %s",
             phone.display_phone_number, list(vals),
         )
     else:
         _logger.info(
-            "ordomatics_setup: phone %s already configured", phone.display_phone_number
+            "ordomatics: phone %s already configured", phone.display_phone_number
         )
 
 
@@ -1059,7 +1060,7 @@ def _find_phone_number(env):
         if phone:
             return phone
         _logger.warning(
-            "ordomatics_setup: WHATSAPP_PHONE_NUMBER=%s not matched — "
+            "ordomatics: WHATSAPP_PHONE_NUMBER=%s not matched — "
             "falling back to first phone number.", target
         )
     return env["whatsapp.phone.number"].search([], limit=1)
@@ -1076,7 +1077,7 @@ def _find_admin_partner(env):
     )
     if not partner:
         _logger.warning(
-            "ordomatics_setup: no partner found for DEFAULT_ADMIN_PHONE=%s", admin_phone
+            "ordomatics: no partner found for DEFAULT_ADMIN_PHONE=%s", admin_phone
         )
     return partner
 
@@ -1101,7 +1102,7 @@ def _setup_whatsapp_catalog(env):
     meta_catalog_id = os.environ.get("WHATSAPP_CATALOG_ID", "").strip()
     if not meta_catalog_id:
         _logger.info(
-            "ordomatics_setup: WHATSAPP_CATALOG_ID not set — skipping catalog setup"
+            "ordomatics: WHATSAPP_CATALOG_ID not set — skipping catalog setup"
         )
         return
 
@@ -1112,7 +1113,7 @@ def _setup_whatsapp_catalog(env):
         else env["whatsapp.account"].search([("active", "=", True)], limit=1)
     )
     if not account:
-        _logger.warning("ordomatics_setup: no WhatsApp account found — skipping catalog setup")
+        _logger.warning("ordomatics: no WhatsApp account found — skipping catalog setup")
         return
 
     catalog_name = os.environ.get("WHATSAPP_CATALOG_NAME", "AI Services").strip() or "AI Services"
@@ -1124,7 +1125,7 @@ def _setup_whatsapp_catalog(env):
         if catalog.name != catalog_name:
             catalog.write({"name": catalog_name, "is_default": True})
         _logger.info(
-            "ordomatics_setup: whatsapp.catalog '%s' (meta_id=%s) already exists",
+            "ordomatics: whatsapp.catalog '%s' (meta_id=%s) already exists",
             catalog_name, meta_catalog_id,
         )
     else:
@@ -1135,7 +1136,7 @@ def _setup_whatsapp_catalog(env):
             "is_default": True,
         })
         _logger.info(
-            "ordomatics_setup: created whatsapp.catalog '%s' (meta_id=%s)",
+            "ordomatics: created whatsapp.catalog '%s' (meta_id=%s)",
             catalog_name, meta_catalog_id,
         )
 
@@ -1144,7 +1145,7 @@ def _setup_whatsapp_catalog(env):
     if phone and not phone.catalog_id:
         phone.write({"catalog_id": catalog.id})
         _logger.info(
-            "ordomatics_setup: linked catalog '%s' to phone %s",
+            "ordomatics: linked catalog '%s' to phone %s",
             catalog_name, phone.display_phone_number,
         )
 
@@ -1152,12 +1153,12 @@ def _setup_whatsapp_catalog(env):
     try:
         catalog.action_pull_from_meta()
         _logger.info(
-            "ordomatics_setup: pulled %d catalog items from Meta for '%s'",
+            "ordomatics: pulled %d catalog items from Meta for '%s'",
             catalog.item_count, catalog_name,
         )
     except Exception as exc:
         _logger.warning(
-            "ordomatics_setup: catalog item pull from Meta failed: %s", exc
+            "ordomatics: catalog item pull from Meta failed: %s", exc
         )
 
 
@@ -1175,12 +1176,12 @@ def _setup_whatsapp_templates(env):
             with env.cr.savepoint():
                 account.action_pull_templates()
             _logger.info(
-                "ordomatics_setup: pulled templates for account '%s' (%d total)",
+                "ordomatics: pulled templates for account '%s' (%d total)",
                 account_name, account.template_count,
             )
         except Exception as exc:
             _logger.warning(
-                "ordomatics_setup: template pull failed for '%s': %s", account_name, exc,
+                "ordomatics: template pull failed for '%s': %s", account_name, exc,
             )
 
 
@@ -1190,13 +1191,13 @@ def _sync_fastapi_endpoints(env):
         return
     endpoints = env["fastapi.endpoint"].search([])
     if not endpoints:
-        _logger.warning("ordomatics_setup: no fastapi.endpoint records found — skipping sync")
+        _logger.warning("ordomatics: no fastapi.endpoint records found — skipping sync")
         return
     try:
         endpoints.action_sync_registry()
         _logger.info(
-            "ordomatics_setup: synced %d FastAPI endpoint(s): %s",
+            "ordomatics: synced %d FastAPI endpoint(s): %s",
             len(endpoints), [e.name for e in endpoints],
         )
     except Exception:
-        _logger.warning("ordomatics_setup: FastAPI endpoint sync failed", exc_info=True)
+        _logger.warning("ordomatics: FastAPI endpoint sync failed", exc_info=True)

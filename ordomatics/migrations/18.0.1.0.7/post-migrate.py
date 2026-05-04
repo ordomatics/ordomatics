@@ -9,4 +9,4 @@ def migrate(cr, version):
     Also reorganises data/ into subfolders (seed/, storage/, prompts/, assistants/).
     No schema changes — new records are loaded via data files.
     """
-    _logger.info("ordomatics_setup 18.0.1.0.7: MRP consultant assistant installed")
+    _logger.info("ordomatics 18.0.1.0.7: MRP consultant assistant installed")

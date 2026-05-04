@@ -8,5 +8,5 @@ def migrate(cr, version):
     skipped, only missing ones are created.
     """
     env = api.Environment(cr, SUPERUSER_ID, {})
-    from odoo.addons.ordomatics_setup.hooks import run_bootstrap
+    from odoo.addons.ordomatics.hooks import run_bootstrap
     run_bootstrap(env)

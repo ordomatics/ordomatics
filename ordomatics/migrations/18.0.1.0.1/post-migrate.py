@@ -9,5 +9,5 @@ def migrate(cr, version):
     converges on every ArgoCD sync that triggers --update-all.
     """
     env = api.Environment(cr, SUPERUSER_ID, {})
-    from odoo.addons.ordomatics_setup.hooks import run_bootstrap
+    from odoo.addons.ordomatics.hooks import run_bootstrap
     run_bootstrap(env)

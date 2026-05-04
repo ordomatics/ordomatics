@@ -17,4 +17,4 @@ def migrate(cr, version):
            AND service = 'openai'
     """)
     if cr.rowcount:
-        _logger.info("ordomatics_setup 18.0.1.0.6: migrated Nomic provider to service=nomic (%d row)", cr.rowcount)
+        _logger.info("ordomatics 18.0.1.0.6: migrated Nomic provider to service=nomic (%d row)", cr.rowcount)

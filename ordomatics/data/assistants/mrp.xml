@@ -5,7 +5,7 @@
         <record id="mrp_consultant_assistant" model="llm.assistant">
             <field name="name">MRP Functional Expert Consultant</field>
             <field name="code">mrp_consultant</field>
-            <field name="prompt_id" ref="ordomatics_setup.mrp_consultant_prompt"/>
+            <field name="prompt_id" ref="ordomatics.mrp_consultant_prompt"/>
             <field name="is_public" eval="False"/>
             <field name="tool_calls_max">10</field>
             <field name="tool_ids" eval="[(6, 0, [
