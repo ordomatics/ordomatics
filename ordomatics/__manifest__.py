@@ -4,7 +4,7 @@
     "category": "Technical",
     "summary": "Default configuration for Ordomatics deployments",
     "license": "LGPL-3",
-    "depends": ["fs_attachment_s3", "whatsapp_llm", "whatsapp_llm_payment", "billing_products"],
+    "depends": ["fs_attachment_s3", "whatsapp_llm", "whatsapp_llm_payment", "billing_llm"],
     "data": [
         "data/storage/fs_storage.xml",
     ],

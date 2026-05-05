@@ -221,7 +221,7 @@ def _sync_billing_product_prices(env):
     standard_price = credit cost (set in data XML).
     list_price = standard_price + billing.profit config param.
     """
-    categ = env.ref('billing_products.product_categ_ai_service', raise_if_not_found=False)
+    categ = env.ref('billing_llm.product_categ_ai_service', raise_if_not_found=False)
     if categ is None:
         return
     products = env['product.template'].search([
@@ -899,9 +899,9 @@ def _index_catalog_for_search(env):
     - collection.embed_resources() to generate and store the vector
 
     Only re-embeds records whose description_sale has changed.
-    No-op if llm.knowledge.collection or billing_products category is not available.
+    No-op if llm.knowledge.collection or AI Service category is not available.
     """
-    categ = env.ref('billing_products.product_categ_ai_service', raise_if_not_found=False)
+    categ = env.ref('billing_llm.product_categ_ai_service', raise_if_not_found=False)
     if env.get("llm.knowledge.collection") is None or categ is None:
         return
 
