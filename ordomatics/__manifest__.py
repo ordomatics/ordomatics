@@ -35,6 +35,7 @@
         # WhatsApp
         "whatsapp_base",
         "whatsapp_messaging",
+        "whatsapp_voip",
         "whatsapp_template",
         "whatsapp_llm",
         "whatsapp_llm_payment",
