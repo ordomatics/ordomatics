@@ -163,8 +163,13 @@ def patch_session_store():
     """
     Called via ``post_load`` in __manifest__.py.
     Replaces ``Application.session_store`` with a Redis-backed store.
+
+    We must patch both the class descriptor AND clear any existing instance
+    attribute, because Odoo's ``lazy_property`` caches the result on the
+    instance on first access — if the original ``FilesystemSessionStore``
+    was already cached, a class-level patch alone would be shadowed.
     """
-    from odoo.http import Application, Session
+    from odoo.http import Application, Session, root
     from odoo.tools.func import lazy_property
 
     @lazy_property
@@ -177,4 +182,7 @@ def patch_session_store():
         return store
 
     Application.session_store = _get_store
+    # Clear any already-cached instance attribute so the new descriptor fires
+    if root is not None:
+        root.__dict__.pop("session_store", None)
     _logger.info("session_redis: Application.session_store patched")
