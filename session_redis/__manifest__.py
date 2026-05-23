@@ -22,7 +22,7 @@ same session state.
 
 **Configuration (env vars)**:
 
-- ``SESSION_REDIS_HOST`` — Redis hostname (default: ``smartacus-test-ordomatics-redis``)
+- ``SESSION_REDIS_HOST`` — Redis hostname (default: ``redis``)
 - ``SESSION_REDIS_PORT`` — Redis port (default: ``6379``)
 - ``SESSION_REDIS_TTL``  — Session TTL in seconds (default: 604800 = 7 days)
 

@@ -16,7 +16,7 @@ import socket as _socket
 
 _logger = logging.getLogger(__name__)
 
-_REDIS_HOST = os.environ.get("SESSION_REDIS_HOST", "smartacus-test-ordomatics-redis")
+_REDIS_HOST = os.environ.get("SESSION_REDIS_HOST", "redis")
 _REDIS_PORT = int(os.environ.get("SESSION_REDIS_PORT", "6379"))
 _SESSION_TTL = int(os.environ.get("SESSION_REDIS_TTL", str(7 * 24 * 3600)))
 _KEY_PREFIX = "odoo_sess:"
