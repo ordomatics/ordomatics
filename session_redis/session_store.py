@@ -162,19 +162,19 @@ _store: RedisSessionStore | None = None
 def patch_session_store():
     """
     Called via ``post_load`` in __manifest__.py.
-    Replaces ``Root.session_store`` with a Redis-backed store.
+    Replaces ``Application.session_store`` with a Redis-backed store.
     """
-    from odoo.http import Root, Session
+    from odoo.http import Application, Session
+    from odoo.tools.func import lazy_property
 
+    @lazy_property
     def _get_store(self):
-        global _store
-        if _store is None:
-            _store = RedisSessionStore(Session, renew_missing=True)
-            _logger.info(
-                "session_redis: session store → Redis (%s:%s, TTL %ds)",
-                _REDIS_HOST, _REDIS_PORT, _SESSION_TTL,
-            )
-        return _store
+        store = RedisSessionStore(Session, renew_missing=True)
+        _logger.info(
+            "session_redis: session store → Redis (%s:%s, TTL %ds)",
+            _REDIS_HOST, _REDIS_PORT, _SESSION_TTL,
+        )
+        return store
 
-    Root.session_store = property(_get_store)
-    _logger.info("session_redis: Root.session_store patched")
+    Application.session_store = _get_store
+    _logger.info("session_redis: Application.session_store patched")
