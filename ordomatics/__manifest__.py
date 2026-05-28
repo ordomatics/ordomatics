@@ -38,11 +38,13 @@
         "whatsapp_voip",
         "whatsapp_template",
         "whatsapp_llm",
+        "whatsapp_payments",
         "whatsapp_llm_payment",
         "whatsapp_catalog",
         # Billing
         "payment_wave",
         "billing_llm",
+        "payment_llm",
     ],
     "installable": True,
     "auto_install": False,
