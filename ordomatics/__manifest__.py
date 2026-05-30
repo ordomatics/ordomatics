@@ -39,7 +39,7 @@
         "whatsapp_template",
         "whatsapp_llm",
         "whatsapp_payments",
-        "whatsapp_llm_payment",
+        "whatsapp_payments_llm",
         "whatsapp_catalog",
         # Billing
         "payment_wave",
