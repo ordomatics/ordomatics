@@ -126,7 +126,52 @@ def _setup_chart_of_accounts(env):
         _logger.info("ordomatics: set default expense account on root product category")
 
 
+def _setup_company_currency(env):
+    """Set XOF as the company currency (Wave requires it).
+
+    Idempotent: activates XOF if inactive, sets it on the company, and
+    updates the product pricelist. Skips the company-currency change if
+    posted journal entries in a different currency already exist (would
+    violate Odoo's accounting constraints).
+    """
+    Currency = env["res.currency"].with_context(active_test=False)
+    xof = Currency.search([("name", "=", "XOF")], limit=1)
+    if not xof:
+        _logger.warning("ordomatics: XOF currency not found — skipping")
+        return
+
+    if not xof.active:
+        xof.active = True
+        _logger.info("ordomatics: activated XOF currency (id=%s)", xof.id)
+
+    company = env.company
+    if company.currency_id == xof:
+        return
+
+    has_entries = env["account.move"].search_count([
+        ("state", "=", "posted"),
+        ("company_id", "=", company.id),
+    ], limit=1)
+    if has_entries:
+        _logger.warning(
+            "ordomatics: posted entries exist — skipping company currency change to XOF"
+        )
+        return
+
+    company.currency_id = xof
+    _logger.info("ordomatics: set company currency to XOF")
+
+    pricelist = env["product.pricelist"].search(
+        [("company_id", "in", [company.id, False])], limit=1
+    )
+    if pricelist and pricelist.currency_id != xof:
+        pricelist.currency_id = xof
+        _logger.info("ordomatics: updated pricelist '%s' to XOF", pricelist.name)
+
+
+
 def run_bootstrap(env):
+    _setup_company_currency(env)
     _setup_chart_of_accounts(env)
     _setup_nomic_embedding(env)
 

@@ -1,6 +1,6 @@
 {
     "name": "Ordomatics Platform",
-    "version": "18.0.1.0.1",
+    "version": "18.0.1.0.3",
     "category": "Technical",
     "summary": "Platform-level dependencies for all Ordomatics deployments",
     "license": "LGPL-3",
