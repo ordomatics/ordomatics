@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ================================================================
+         Tool: odoo_n8n_trigger
+         xml_managed=True — this record IS the tool registration.
+         noupdate="0" so description improvements apply on upgrade.
+         ================================================================ -->
+    <record id="tool_odoo_n8n_trigger" model="llm.tool">
+        <field name="name">odoo_n8n_trigger</field>
+        <field name="implementation">function</field>
+        <field name="decorator_model">llm.n8n.tool</field>
+        <field name="decorator_method">odoo_n8n_trigger</field>
+        <field name="open_world_hint" eval="True"/>
+        <field name="idempotent_hint" eval="False"/>
+        <field name="active" eval="True"/>
+        <field name="description">Trigger a registered n8n workflow by name and return its response.
+
+Use this to delegate tasks to automated n8n workflows — for example:
+creating a Sage Business Cloud invoice, sending an email, syncing
+an external system, or running any other configured automation.
+
+If the workflow name is unknown or not found, the tool returns an
+"available_workflows" list so you can correct the name and retry.
+
+Parameters:
+  workflow_name (str): exact name of the n8n webhook record in Odoo
+  payload (dict, optional): data to pass to the workflow</field>
+    </record>
+
+    <!-- ================================================================
+         Prompt
+         noupdate="0" — system prompt improvements apply on upgrade.
+         ================================================================ -->
+    <record id="prompt_n8n_automation" model="llm.prompt">
+        <field name="name">n8n Automation Assistant</field>
+        <field name="format">text</field>
+        <field name="arguments_json">{}</field>
+        <field name="template"><![CDATA[
+You are an automation assistant that connects Odoo with external systems
+through n8n workflows. Your primary job is to understand what the user or
+the system wants to accomplish, pick the right n8n workflow, and trigger it
+with the correct payload.
+
+## Tool available
+
+**odoo_n8n_trigger(workflow_name, payload)**
+
+Triggers a registered n8n workflow. The workflow runs a Claude AI agent
+with access to external services (Sage Business Cloud, email, etc.) and
+returns the result.
+
+If you pass a wrong or unknown workflow_name, the tool returns:
+  {"error": "...", "available_workflows": ["name1", "name2", ...]}
+Use the list to pick the correct name and retry immediately — do not
+ask the user for the workflow name.
+
+## Behaviour guidelines
+
+1. **Act, don't narrate.** Call the tool first, then report the result.
+   Never describe what you are about to do before doing it.
+
+2. **Self-correct on failure.** If the tool returns an error with
+   available_workflows, pick the closest match and retry automatically.
+
+3. **Report outcomes concisely.** One short sentence per successful action.
+   Include IDs or reference numbers returned by the workflow.
+
+4. **Pending responses.** If the workflow returns {"pending": true}, inform
+   the user the task is queued and will complete asynchronously.
+
+5. **Missing information.** Only ask the user for clarification if essential
+   input (e.g. customer name, amount) cannot be inferred from context.
+
+## Example: Sage invoice creation
+
+User: "Create an invoice for Acme Corp for the 3 licenses at €120 each."
+
+You:
+1. Call odoo_n8n_trigger("sage-invoice", {
+       "contact_name": "Acme Corp",
+       "lines": [{"description": "License", "quantity": 3, "unit_price": 120}]
+   })
+2. Report: "Invoice INV-2024-042 created in Sage for Acme Corp (€360)."
+        ]]></field>
+    </record>
+
+    <!-- ================================================================
+         Assistant
+         noupdate="1" — preserves operator-configured provider/model on upgrade.
+         Set provider_id and model_id manually after install via
+         LLM > Assistants, or via a post_init_hook in your setup module.
+         ================================================================ -->
+    <data noupdate="1">
+        <record id="assistant_n8n_automation" model="llm.assistant">
+            <field name="name">n8n Automation</field>
+            <field name="code">n8n_automation</field>
+            <field name="prompt_id" ref="prompt_n8n_automation"/>
+            <field name="is_public" eval="False"/>
+            <field name="tool_calls_max">10</field>
+            <field name="tool_ids" eval="[(6, 0, [ref('llm_n8n.tool_odoo_n8n_trigger')])]"/>
+        </record>
+    </data>
+
+</odoo>

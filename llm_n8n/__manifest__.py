@@ -4,7 +4,8 @@
     "category": "Technical",
     "summary": "Gives Odoo LLM agents the ability to trigger n8n workflows as a tool",
     "license": "LGPL-3",
-    "depends": ["llm_tool", "n8n_connector"],
+    "depends": ["llm_tool", "llm_assistant", "n8n_connector"],
+    "data": ["data/llm_n8n_data.xml"],
     "installable": True,
     "auto_install": False,
 }

@@ -8,7 +8,7 @@ class LlmN8nTool(models.AbstractModel):
     _name = "llm.n8n.tool"
     _description = "n8n Workflow Tool"
 
-    @llm_tool(open_world_hint=True, idempotent_hint=False)
+    @llm_tool(xml_managed=True, open_world_hint=True, idempotent_hint=False)
     def odoo_n8n_trigger(
         self,
         workflow_name: str,
