@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_n8n_webhook_list" model="ir.ui.view">
+        <field name="name">n8n.webhook.list</field>
+        <field name="model">n8n.webhook</field>
+        <field name="arch" type="xml">
+            <list string="n8n Webhooks">
+                <field name="name"/>
+                <field name="webhook_url"/>
+                <field name="test_url"/>
+                <field name="active"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_n8n_webhook_form" model="ir.ui.view">
+        <field name="name">n8n.webhook.form</field>
+        <field name="model">n8n.webhook</field>
+        <field name="arch" type="xml">
+            <form string="n8n Webhook">
+                <sheet>
+                    <field name="active" widget="boolean_toggle"/>
+                    <group>
+                        <field name="name"/>
+                        <field name="webhook_url"/>
+                        <field name="test_url"/>
+                    </group>
+                    <group string="Authentication">
+                        <field name="auth_header_name" placeholder="e.g. X-Auth-Token"/>
+                        <field name="auth_header_value" password="True"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_n8n_webhook" model="ir.actions.act_window">
+        <field name="name">n8n Webhooks</field>
+        <field name="res_model">n8n.webhook</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem
+        id="menu_n8n_root"
+        name="n8n"
+        parent="base.menu_administration"
+        sequence="100"/>
+
+    <menuitem
+        id="menu_n8n_webhooks"
+        name="Webhooks"
+        parent="menu_n8n_root"
+        action="action_n8n_webhook"
+        sequence="10"/>
+</odoo>

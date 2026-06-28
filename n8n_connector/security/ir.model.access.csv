@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_n8n_webhook_admin,n8n.webhook admin,model_n8n_webhook,base.group_system,1,1,1,1
+access_n8n_webhook_user,n8n.webhook user,model_n8n_webhook,base.group_user,1,0,0,0
