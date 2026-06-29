@@ -26,7 +26,7 @@ class N8nWebhook(models.Model):
         if self.auth_header_name and self.auth_header_value:
             headers[self.auth_header_name] = self.auth_header_value
         try:
-            resp = requests.post(url, json=payload, headers=headers, timeout=10)
+            resp = requests.post(url, json=payload, headers=headers, timeout=60)
             resp.raise_for_status()
             return resp.json() if resp.content else {}
         except Exception:
