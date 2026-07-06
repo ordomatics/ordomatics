@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <record id="mssql_mcp_server_config" model="llm.mcp.server.config">
+        <field name="name">MSSQL MCP Server</field>
+        <field name="version">1.0.0</field>
+        <field name="endpoint_path">/mcp/mssql</field>
+        <field name="latest_protocol_version">2025-11-25</field>
+        <field name="supported_protocol_versions" eval="['2025-06-18']"/>
+        <field name="mode">stateful</field>
+        <field name="active" eval="True"/>
+        <field name="external_url"/>
+    </record>
+</odoo>

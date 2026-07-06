@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo noupdate="1">
+    <record id="mssql_param_host" model="ir.config_parameter">
+        <field name="key">mssql.host</field>
+        <field name="value"></field>
+    </record>
+    <record id="mssql_param_port" model="ir.config_parameter">
+        <field name="key">mssql.port</field>
+        <field name="value">1433</field>
+    </record>
+    <record id="mssql_param_database" model="ir.config_parameter">
+        <field name="key">mssql.database</field>
+        <field name="value">MAS500</field>
+    </record>
+    <record id="mssql_param_user" model="ir.config_parameter">
+        <field name="key">mssql.user</field>
+        <field name="value"></field>
+    </record>
+    <record id="mssql_param_password" model="ir.config_parameter">
+        <field name="key">mssql.password</field>
+        <field name="value"></field>
+    </record>
+</odoo>
